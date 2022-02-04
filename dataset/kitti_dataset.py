@@ -1,8 +1,10 @@
 import os
-import open3d
+
 import numpy as np
-from dataset.semantic_dataset import SemanticFileData, SemanticDataset
+import open3d
 import pykitti
+
+from dataset.semantic_dataset import SemanticDataset, SemanticFileData
 
 
 class KittiFileData(SemanticFileData):
@@ -11,19 +13,19 @@ class KittiFileData(SemanticFileData):
         self.box_size_y = box_size_y
 
         # Crop the region of interest centered at origin
-        # TODO: This is a special treatment, since we only care about the origin now
-        min_z = -2
-        max_z = 5
-        min_x = -self.box_size_x / 2.0
-        max_x = -min_x
-        min_y = -self.box_size_y / 2.0
-        max_y = -min_y
+        # # TODO: This is a special treatment, since we only care about the origin now
+        # min_z = -2
+        # max_z = 5
+        # min_x = -self.box_size_x / 2.0
+        # max_x = -min_x
+        # min_y = -self.box_size_y / 2.0
+        # max_y = -min_y
         pcd = open3d.PointCloud()
         pcd.points = open3d.Vector3dVector(points)
-        region_pcd = open3d.crop_point_cloud(
-            pcd, [min_x, min_y, min_z], [max_x, max_y, max_z]
-        )
-        self.points = np.asarray(region_pcd.points)
+        # region_pcd = open3d.crop_point_cloud(
+        #     pcd, [min_x, min_y, min_z], [max_x, max_y, max_z]
+        # )
+        self.points = np.asarray(pcd.points)
 
         # Load label. In pure test set, fill with zeros.
         self.labels = np.zeros(len(self.points)).astype(bool)

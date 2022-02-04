@@ -151,84 +151,32 @@ if __name__ == "__main__":
 
     # Init visualizer
     dense_pcd = open3d.PointCloud()
-    vis = open3d.Visualizer()
-    vis.create_window()
-    vis.add_geometry(dense_pcd)
-    render_option = vis.get_render_option()
-    render_option.point_size = 0.05
+    # vis = open3d.Visualizer()
+    # vis.create_window()
+    # vis.add_geometry(dense_pcd)
+    # render_option = vis.get_render_option()
+    # render_option.point_size = 0.05
 
-    to_reset_view_point = True
-    is_stop = True
-    for kitti_file_data in dataset.list_file_data:
-        timer = {
-            "load_data": 0,
-            "predict_interpolate": 0,
-            "visualize": 0,
-            "write_data": 0,
-            "total": 0,
-        }
+    kitti_file_data = dataset.list_file_data[0]
 
-        global_start_time = time.time()
-
-        # Predict for num_samples times
-        points_collector = []
-        pd_labels_collector = []
-
-        # Get data
-        start_time = time.time()
-        points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
+    # Get data
+    points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
             num_points_per_sample=hyper_params["num_point"]
         )
-        if len(points_centered) > max_batch_size:
-            raise NotImplementedError("TODO: iterate batches if > max_batch_size")
-        timer["load_data"] += time.time() - start_time
+    if len(points_centered) > max_batch_size:
+        raise NotImplementedError("TODO: iterate batches if > max_batch_size")
 
-        # Predict and interpolate
-        start_time = time.time()
-        dense_points = kitti_file_data.points
-        dense_labels, dense_colors = predictor.predict_and_interpolate(
+    # Predict and interpolate
+    dense_points = kitti_file_data.points
+    dense_labels, dense_colors = predictor.predict_and_interpolate(
             sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
             sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
             dense_points=dense_points,  # (num_dense_points, 3)
         )
-        timer["predict_interpolate"] += time.time() - start_time
+    
+    # visualize
+    dense_pcd.points = open3d.Vector3dVector(dense_points)
+    dense_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
+    open3d.draw_geometries([dense_pcd])
 
-        # Visualize
-        start_time = time.time()
-        dense_pcd.points = open3d.Vector3dVector(dense_points)
-        dense_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
-        vis.update_geometry()
-        if to_reset_view_point:
-            vis.reset_view_point(True)
-            to_reset_view_point = False
-        vis.poll_events()
-        vis.update_renderer()
-        timer["visualize"] += time.time() - start_time
-
-        # Save dense point cloud with predicted labels
-        if flags.save:
-            start_time = time.time()
-            file_prefix = os.path.basename(kitti_file_data.file_path_without_ext)
-
-            dense_pcd = open3d.PointCloud()
-            dense_pcd.points = open3d.Vector3dVector(dense_points.reshape((-1, 3)))
-            dense_pcd_path = os.path.join(dense_output_dir, file_prefix + ".pcd")
-            open3d.write_point_cloud(dense_pcd_path, dense_pcd)
-            print("Exported dense_pcd to {}".format(dense_pcd_path))
-
-            dense_labels_path = os.path.join(dense_output_dir, file_prefix + ".labels")
-            np.savetxt(dense_labels_path, dense_labels, fmt="%d")
-            print("Exported dense_labels to {}".format(dense_labels_path))
-            timer["write_data"] += time.time() - start_time
-
-        timer["total"] += time.time() - global_start_time
-
-        # Print timer
-        fmt_string = "[{:5.2f} FPS] " + ": {:.04f}, ".join(timer.keys()) + ": {:.04f}"
-        fmt_values = [1.0 / timer["total"]] + list(timer.values())
-        print(fmt_string.format(*fmt_values))
-
-        if is_stop:
-            print("Input enter to continue")
-            input()
-            # is_stop = False
+    
