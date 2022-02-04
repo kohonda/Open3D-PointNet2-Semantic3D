@@ -1,10 +1,11 @@
 import argparse
-import os
 import json
-import numpy as np
-import tensorflow as tf
-import open3d
+import os
 import time
+
+import numpy as np
+import open3d
+import tensorflow as tf
 
 import model
 from dataset.kitti_dataset import KittiDataset
@@ -135,7 +136,7 @@ if __name__ == "__main__":
         base_dir=flags.kitti_root,
         dates=["2011_09_26"],
         # drives=["0095", "0001"],
-        drives=["0095"],
+        drives=["0001"],
         box_size_x=hyper_params["box_size_x"],
         box_size_y=hyper_params["box_size_y"],
     )
