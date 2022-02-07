@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import open3d
+import scipy.spatial as ss
 import tensorflow as tf
 
 import model
@@ -39,7 +40,7 @@ class PredictInterpolator:
             pl_is_training = tf.placeholder(tf.bool, shape=())
 
             # Prediction
-            pred, _ = model.get_model(
+            pred, end_points = model.get_model(
                 pl_sparse_points_centered_batched,
                 pl_is_training,
                 num_classes,
@@ -71,6 +72,7 @@ class PredictInterpolator:
             "pl_knn": pl_knn,
             "dense_labels": dense_labels,
             "dense_colors": dense_colors,
+            "end_points": end_points
         }
 
         # Restore checkpoint to session
@@ -90,8 +92,8 @@ class PredictInterpolator:
         run_metadata=None,
         run_options=None,
     ):
-        dense_labels_val, dense_colors_val = self.sess.run(
-            [self.ops["dense_labels"], self.ops["dense_colors"]],
+        dense_labels_val, dense_colors_val, end_points = self.sess.run(
+            [self.ops["dense_labels"], self.ops["dense_colors"], self.ops["end_points"]],
             feed_dict={
                 self.ops[
                     "pl_sparse_points_centered_batched"
@@ -102,7 +104,10 @@ class PredictInterpolator:
                 self.ops["pl_is_training"]: False,
             },
         )
-        return dense_labels_val, dense_colors_val
+        print("dense points size: ", len(dense_points))
+        print("sparce points size: ", sparse_points_batched.shape)
+        print("end points size: ", end_points["feats"].shape)
+        return dense_labels_val, dense_colors_val, end_points
 
 
 if __name__ == "__main__":
@@ -150,7 +155,7 @@ if __name__ == "__main__":
     )
 
     # Init visualizer
-    dense_pcd = open3d.PointCloud()
+    pcd = open3d.PointCloud()
     # vis = open3d.Visualizer()
     # vis.create_window()
     # vis.add_geometry(dense_pcd)
@@ -166,17 +171,36 @@ if __name__ == "__main__":
     if len(points_centered) > max_batch_size:
         raise NotImplementedError("TODO: iterate batches if > max_batch_size")
 
+    print("raw points size: ", points.shape)
+
     # Predict and interpolate
     dense_points = kitti_file_data.points
-    dense_labels, dense_colors = predictor.predict_and_interpolate(
+    dense_labels, dense_colors, end_points = predictor.predict_and_interpolate(
             sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
             sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
             dense_points=dense_points,  # (num_dense_points, 3)
         )
     
     # visualize
-    dense_pcd.points = open3d.Vector3dVector(dense_points)
-    dense_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
-    open3d.draw_geometries([dense_pcd])
+    # pcd.points = open3d.Vector3dVector(dense_points)
+    # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
+
+    # Coloring by feature points
+    raw_points = points_centered[0]
+    features = end_points["feats"][0]
+    points_colors = np.zeros((len(raw_points), 3)) # RGB
+    for i in range(len(raw_points)):
+        points_colors[i][0] = features[i][0]
+        points_colors[i][1] = 0
+        points_colors[i][2] = 0
+        # points_colors[i] = features[i][0]
+
+    # visualize raw points
+    # print("raw points size: ", raw_points.shape)
+    pcd.points = open3d.Vector3dVector(raw_points)
+    # print("color size: ", points_colors.shape)
+    pcd.colors = open3d.Vector3dVector(points_colors)
+
+    open3d.draw_geometries([pcd])
 
     

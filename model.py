@@ -5,8 +5,9 @@ ROOT_DIR = os.path.abspath(os.path.pardir)
 sys.path.append(ROOT_DIR)
 
 import tensorflow as tf
+
 import util.tf_util as tf_util
-from util.pointnet_util import pointnet_sa_module, pointnet_fp_module
+from util.pointnet_util import pointnet_fp_module, pointnet_sa_module
 
 
 def get_placeholders(num_point, hyperparams):
@@ -139,7 +140,7 @@ def get_model(point_cloud, is_training, num_class, hyperparams, bn_decay=None):
         scope="fc1",
         bn_decay=bn_decay,
     )
-    end_points["feats"] = net
+    end_points["feats"] = net # おそらく最終段の特徴量
     net = tf_util.dropout(net, keep_prob=0.5, is_training=is_training, scope="dp1")
     net = tf_util.conv1d(
         net, num_class, 1, padding="VALID", activation_fn=None, scope="fc2"
