@@ -139,6 +139,12 @@ class PredictInterpolator:
         print("sparse labels: ", sparse_labels_val)
         return sparse_labels_val, sparse_colors_val, end_points
 
+
+def gen_random_color():
+    color = np.random.rand(3)
+    return color
+
+
 def coloring_similar_feature_points(points, features, target_point_idx_list, coloring_points_num):
     #  coloring by feature points
     points_colors = np.zeros((len(points), 3))
@@ -146,18 +152,8 @@ def coloring_similar_feature_points(points, features, target_point_idx_list, col
     for target_point_idx in target_point_idx_list:
         tree = ss.KDTree(features)    
         _, index = tree.query(features[target_point_idx], coloring_points_num)
-
-        # similar points : coloed by greed
-        for i in index:
-            points_colors[i][0] = 0
-            points_colors[i][1] = 255
-            points_colors[i][2] = 0
-        
-        # target point : coloed by red
-        points_colors[target_point_idx][0] = 255
-        points_colors[target_point_idx][1] = 0
-        points_colors[target_point_idx][2] = 0
-    
+        points_colors[index] = gen_random_color()
+   
     return points_colors
 
 
