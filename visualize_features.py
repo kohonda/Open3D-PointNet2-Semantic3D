@@ -8,8 +8,11 @@ import open3d
 
 print(open3d.__version__)
 
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import scipy.spatial as ss
 import tensorflow as tf
+from sklearn.decomposition import PCA
 
 import model
 from dataset.kitti_dataset import KittiDataset
@@ -110,9 +113,9 @@ class PredictInterpolator:
                 self.ops["pl_is_training"]: False,
             },
         )
-        print("dense points size: ", len(dense_points))
-        print("sparce points size: ", sparse_points_batched.shape)
-        print("end points size: ", end_points["feats"].shape)
+        # print("dense points size: ", len(dense_points))
+        # print("sparce points size: ", sparse_points_batched.shape)
+        # print("end points size: ", end_points["feats"].shape)
         return dense_labels_val, dense_colors_val, end_points
     
     def predict(
@@ -201,15 +204,8 @@ if __name__ == "__main__":
         hyper_params=hyper_params,
     )
 
-    # Init visualizer
-    # pcd = open3d.PointCloud()
-    # vis = open3d.Visualizer()
-    # vis.create_window()
-    # vis.add_geometry(dense_pcd)
-    # render_option = vis.get_render_option()
-    # render_option.point_size = 0.05
-
-    kitti_file_data = dataset.list_file_data[100]
+    DATA_ID = 10
+    kitti_file_data = dataset.list_file_data[DATA_ID]
 
     # Get data
     points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
@@ -228,34 +224,42 @@ if __name__ == "__main__":
             dense_points=dense_points,  # (num_dense_points, 3)
         )
     
-    # Predict
-    # sparse_labels, sparse_colors, end_points = predictor.predict(
-    #         sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
-    #         sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
-    #         dense_points=dense_points,  # (num_dense_points, 3)
-    #     )
-
     
-    # visualize
+    # visualize dense points
     # pcd.points = open3d.Vector3dVector(dense_points)
     # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
     raw_points = points_centered[0]
+
+    # 特徴量を取得
     features = end_points["feats"][0]
 
-    # target_point_idx = 1000
-    # coloring_num = 30
-    # points_colors = coloring_similar_feature_points(raw_points, features, target_point_idx, coloring_num)
-    points_colors = np.zeros((len(raw_points), 3)) # Black
- 
+    # 次元圧縮
+    pca = PCA(n_components=4)
+    compressed_features = pca.fit_transform(features)
+    print("Raw features shape: ", features.shape)
+    print("compressed features size: ", compressed_features.shape)
+    # 寄与率
+    print("explained variance ratio: ", pca.explained_variance_ratio_)
+    print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
+
+    is_save_variance_ratio = False
+    if is_save_variance_ratio:
+        plt.gca().get_xaxis().set_major_locator(ticker.MaxNLocator(integer=True))
+        plt.plot([0] + list( np.cumsum(pca.explained_variance_ratio_)), "-o")
+        plt.xlabel("Number of principal components")
+        plt.ylabel("Cumulative contribution rate")
+        plt.grid()
+        plt.savefig('result/features_variance_ratio.png')
+    
+
     # visualize raw points
     pcd = open3d.PointCloud()
-    # print("raw points size: ", raw_points.shape)
     pcd.points = open3d.Vector3dVector(raw_points)
-    # print("color size: ", points_colors.shape)
+    points_colors = np.zeros((len(raw_points), 3)) # Black
     pcd.colors = open3d.Vector3dVector(points_colors)
 
-    # # visualize labeled points
+    # # visualize labeled dense points
     # classed_pcd = open3d.PointCloud()
     # classed_pcd.points = open3d.Vector3dVector(dense_points)
     # classed_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
@@ -282,7 +286,8 @@ if __name__ == "__main__":
     print("picked points: ", picked_points_index)
 
     # visualize colored by features
-    points_colors = coloring_similar_feature_points(raw_points, features, picked_points_index, 10)
+    nearest_points_num = 30
+    points_colors = coloring_similar_feature_points(raw_points, compressed_features, picked_points_index, 30)
     
     pcd.colors = open3d.Vector3dVector(points_colors)
     open3d.draw_geometries([pcd])
