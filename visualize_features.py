@@ -5,6 +5,9 @@ import time
 
 import numpy as np
 import open3d
+
+print(open3d.__version__)
+
 import scipy.spatial as ss
 import tensorflow as tf
 
@@ -50,6 +53,7 @@ class PredictInterpolator:
             # (1, num_sparse_points) -> (num_sparse_points,)
             sparse_labels = tf.reshape(sparse_labels_batched, [-1])
             sparse_labels = tf.cast(sparse_labels, tf.int32)
+            sparse_colors = tf.one_hot(sparse_labels, num_classes)
 
             # Saver
             saver = tf.train.Saver()
@@ -72,7 +76,9 @@ class PredictInterpolator:
             "pl_knn": pl_knn,
             "dense_labels": dense_labels,
             "dense_colors": dense_colors,
-            "end_points": end_points
+            "end_points": end_points,
+            "sparse_labels": sparse_labels,
+            "sparse_colors": sparse_colors
         }
 
         # Restore checkpoint to session
@@ -108,6 +114,51 @@ class PredictInterpolator:
         print("sparce points size: ", sparse_points_batched.shape)
         print("end points size: ", end_points["feats"].shape)
         return dense_labels_val, dense_colors_val, end_points
+    
+    def predict(
+        self,
+        sparse_points_centered_batched,
+        sparse_points_batched,
+        dense_points,
+        run_metadata=None,
+        run_options=None,
+    ):
+        sparse_labels_val, sparse_colors_val, end_points = self.sess.run(
+            [self.ops["sparse_labels"], self.ops["sparse_colors"], self.ops["end_points"]],
+            feed_dict={
+                self.ops[
+                    "pl_sparse_points_centered_batched"
+                ]: sparse_points_centered_batched,
+                self.ops["pl_sparse_points_batched"]: sparse_points_batched,
+                self.ops["pl_dense_points"]: dense_points,
+                self.ops["pl_knn"]: 3,
+                self.ops["pl_is_training"]: False,
+            },
+        )
+        print("sparse colors: ", sparse_colors_val)
+        print("sparse labels: ", sparse_labels_val)
+        return sparse_labels_val, sparse_colors_val, end_points
+
+def coloring_similar_feature_points(points, features, target_point_idx_list, coloring_points_num):
+    #  coloring by feature points
+    points_colors = np.zeros((len(points), 3))
+    
+    for target_point_idx in target_point_idx_list:
+        tree = ss.KDTree(features)    
+        _, index = tree.query(features[target_point_idx], coloring_points_num)
+
+        # similar points : coloed by greed
+        for i in index:
+            points_colors[i][0] = 0
+            points_colors[i][1] = 255
+            points_colors[i][2] = 0
+        
+        # target point : coloed by red
+        points_colors[target_point_idx][0] = 255
+        points_colors[target_point_idx][1] = 0
+        points_colors[target_point_idx][2] = 0
+    
+    return points_colors
 
 
 if __name__ == "__main__":
@@ -155,14 +206,14 @@ if __name__ == "__main__":
     )
 
     # Init visualizer
-    pcd = open3d.PointCloud()
+    # pcd = open3d.PointCloud()
     # vis = open3d.Visualizer()
     # vis.create_window()
     # vis.add_geometry(dense_pcd)
     # render_option = vis.get_render_option()
     # render_option.point_size = 0.05
 
-    kitti_file_data = dataset.list_file_data[0]
+    kitti_file_data = dataset.list_file_data[100]
 
     # Get data
     points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
@@ -181,26 +232,61 @@ if __name__ == "__main__":
             dense_points=dense_points,  # (num_dense_points, 3)
         )
     
+    # Predict
+    # sparse_labels, sparse_colors, end_points = predictor.predict(
+    #         sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
+    #         sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
+    #         dense_points=dense_points,  # (num_dense_points, 3)
+    #     )
+
+    
     # visualize
     # pcd.points = open3d.Vector3dVector(dense_points)
     # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
-    # Coloring by feature points
     raw_points = points_centered[0]
     features = end_points["feats"][0]
-    points_colors = np.zeros((len(raw_points), 3)) # RGB
-    for i in range(len(raw_points)):
-        points_colors[i][0] = features[i][0]
-        points_colors[i][1] = 0
-        points_colors[i][2] = 0
-        # points_colors[i] = features[i][0]
 
+    # target_point_idx = 1000
+    # coloring_num = 30
+    # points_colors = coloring_similar_feature_points(raw_points, features, target_point_idx, coloring_num)
+    points_colors = np.zeros((len(raw_points), 3)) # Black
+ 
     # visualize raw points
+    pcd = open3d.PointCloud()
     # print("raw points size: ", raw_points.shape)
     pcd.points = open3d.Vector3dVector(raw_points)
     # print("color size: ", points_colors.shape)
     pcd.colors = open3d.Vector3dVector(points_colors)
 
-    open3d.draw_geometries([pcd])
+    # # visualize labeled points
+    # classed_pcd = open3d.PointCloud()
+    # classed_pcd.points = open3d.Vector3dVector(dense_points)
+    # classed_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
+    # open3d.draw_geometries([pcd])
+    # open3d.draw_geometries([classed_pcd])
+
+    def pick_points(pcd):
+        print("")
+        print(
+            "1) Please pick point by [shift + left click]"
+        )
+        print("   Press [shift + right click] to undo point picking")
+        print("2) Afther picking points, press q for close the window")
+        vis = open3d.VisualizerWithEditing()
+        vis.create_window()
+        vis.add_geometry(pcd)
+        vis.run()  # user picks points
+        vis.destroy_window()
+        print("")
+        return vis.get_picked_points()
     
+    picked_points_index =  pick_points(pcd)
+    print("picked points: ", picked_points_index)
+
+    # visualize colored by features
+    points_colors = coloring_similar_feature_points(raw_points, features, picked_points_index, 10)
+    
+    pcd.colors = open3d.Vector3dVector(points_colors)
+    open3d.draw_geometries([pcd])
