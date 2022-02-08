@@ -12,8 +12,9 @@ import tensorflow as tf
 from sklearn.decomposition import PCA
 
 import model
-from dataset.kitti_dataset import KittiDataset
+from dataset.kitti_dataset import KittiDataset, KittiDatasetFeatures
 from tf_ops.tf_interpolate import interpolate_label_with_color
+from util.features_util import gen_dense_features
 
 
 def interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k=3):
@@ -67,6 +68,7 @@ class PredictInterpolator:
             dense_labels, dense_colors = interpolate_label_with_color(
                 sparse_points, sparse_labels, pl_dense_points, pl_knn
             )
+            # TODO: 特徴量の補完
 
         self.ops = {
             "pl_sparse_points_centered_batched": pl_sparse_points_centered_batched,
@@ -110,9 +112,8 @@ class PredictInterpolator:
                 self.ops["pl_is_training"]: False,
             },
         )
-        # print("dense points size: ", len(dense_points))
-        # print("sparce points size: ", sparse_points_batched.shape)
-        # print("end points size: ", end_points["feats"].shape)
+
+
         return dense_labels_val, dense_colors_val, end_points
     
     def predict(
@@ -168,29 +169,30 @@ if __name__ == "__main__":
         default=8,
         help="# samples, each contains num_point points",
     )
-    parser.add_argument("--ckpt", default="", help="Checkpoint file")
-    parser.add_argument("--save", action="store_true", default=False)
+    parser.add_argument("--ckpt", default="weights/best_model_epoch_060.ckpt", help="Checkpoint file")
     parser.add_argument(
         "--kitti_root", default="", help="Checkpoint file", required=True
     )
+    parser.add_argument("--sequence", default="00", help="sequence")
+    parser.add_argument("--output_dir", default="/home/honda/data/kitti_features_pointnet", help="Output dir")
+    
+    
     flags = parser.parse_args()
     hyper_params = json.loads(open("semantic_no_color.json").read())
 
     # Create output dir
-    sparse_output_dir = os.path.join("result", "sparse")
-    dense_output_dir = os.path.join("result", "dense")
-    os.makedirs(sparse_output_dir, exist_ok=True)
-    os.makedirs(dense_output_dir, exist_ok=True)
+    if not os.path.exists(flags.output_dir):
+        os.makedirs(flags.output_dir)
+
+    output_folder = os.path.join(flags.output_dir, flags.sequence)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    print("Output dir: ", output_folder)
 
     # Dataset
-    dataset = KittiDataset(
-        num_points_per_sample=hyper_params["num_point"],
+    dataset = KittiDatasetFeatures(
         base_dir=flags.kitti_root,
-        dates=["2011_09_26"],
-        # drives=["0095", "0001"],
-        drives=["0001"],
-        box_size_x=hyper_params["box_size_x"],
-        box_size_y=hyper_params["box_size_y"],
+        sequence_num=flags.sequence
     )
 
     # Model
@@ -201,9 +203,12 @@ if __name__ == "__main__":
         hyper_params=hyper_params,
     )
 
-    DATA_ID = 107
+    DATA_ID = 1
     print("DATA_ID: ", DATA_ID)
     kitti_file_data = dataset.list_file_data[DATA_ID]
+
+
+    print("raw points size: ", kitti_file_data.points.shape)
 
     # Get data
     points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
@@ -212,7 +217,8 @@ if __name__ == "__main__":
     if len(points_centered) > max_batch_size:
         raise NotImplementedError("TODO: iterate batches if > max_batch_size")
 
-    print("raw points size: ", points.shape)
+    print("sampled points size: ", points.shape)
+
 
     # Predict and interpolate
     dense_points = kitti_file_data.points
@@ -221,49 +227,43 @@ if __name__ == "__main__":
             sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
             dense_points=dense_points,  # (num_dense_points, 3)
         )
-    
+
+    print("dense points size: ", dense_points.shape)
     
     # visualize dense points
     # pcd.points = open3d.Vector3dVector(dense_points)
     # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
-    raw_points = points_centered[0]
+    sparse_points = points_centered[0]
 
     # 特徴量を取得
-    features = end_points["feats"][0]
+    sparse_features = end_points["feats"][0]
+
 
     # 次元圧縮
     pca = PCA(n_components=4)
-    compressed_features = pca.fit_transform(features)
-    print("Raw features shape: ", features.shape)
+    compressed_features = pca.fit_transform(sparse_features)
+    print("Raw features shape: ", sparse_features.shape)
     print("compressed features size: ", compressed_features.shape)
     # 寄与率
     print("explained variance ratio: ", pca.explained_variance_ratio_)
     print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
 
-    is_save_variance_ratio = True
-    if is_save_variance_ratio:
-        plt.gca().get_xaxis().set_major_locator(ticker.MaxNLocator(integer=True))
-        plt.plot([0] + list( np.cumsum(pca.explained_variance_ratio_)), "-o")
-        plt.xlabel("Number of principal components")
-        plt.ylabel("Cumulative contribution rate")
-        plt.grid()
-        plt.savefig('result/features_variance_ratio.png')
-    
 
-    # visualize raw points
-    pcd = open3d.PointCloud()
-    pcd.points = open3d.Vector3dVector(raw_points)
-    points_colors = np.zeros((len(raw_points), 3)) # Black
-    pcd.colors = open3d.Vector3dVector(points_colors)
+    # Denseな特徴量を復元
+    # TODO: 圧縮する前にinterpolate すること
+    dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
+    print("dense_features size: ", dense_features.shape)
 
-    # # visualize labeled dense points
-    classed_pcd = open3d.PointCloud()
-    classed_pcd.points = open3d.Vector3dVector(dense_points)
-    classed_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
+    # 特徴量をファイルごとに出力
+    input_file_path = dataset.file_list[DATA_ID]
+    file_name = os.path.splitext(os.path.basename(input_file_path))[0]  
+    output_file = os.path.join(output_folder, "{}.txt".format(file_name))
+    np.savetxt(output_file, dense_features, fmt="%.6f")
 
-    # open3d.draw_geometries([pcd])
-    open3d.draw_geometries([classed_pcd])
+    # 特徴量を読み込み
+    dense_compressed_features = np.loadtxt(output_file)
+    print("Dense compressed features shape: ", dense_compressed_features.shape)
 
     def pick_points(pcd):
         print("")
@@ -280,12 +280,20 @@ if __name__ == "__main__":
         print("")
         return vis.get_picked_points()
     
+    # visualize raw points
+    pcd = open3d.PointCloud()
+    pcd.points = open3d.Vector3dVector(dense_points)
+    points_colors = np.zeros((len(dense_points), 3)) # Black
+    pcd.colors = open3d.Vector3dVector(dense_colors)
+
     picked_points_index =  pick_points(pcd)
     print("picked points: ", picked_points_index)
 
     # visualize colored by features
-    nearest_points_num = 100
-    points_colors = coloring_similar_feature_points(raw_points, compressed_features, picked_points_index, 30)
+    nearest_points_num = 10
+    points_colors = coloring_similar_feature_points(dense_points, dense_compressed_features, picked_points_index, nearest_points_num)
     
     pcd.colors = open3d.Vector3dVector(points_colors)
     open3d.draw_geometries([pcd])
+
+   
