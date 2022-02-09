@@ -194,6 +194,17 @@ if __name__ == "__main__":
         os.makedirs(output_folder)
     print("Output dir: ", output_folder)
 
+    denth_features_folder = os.path.join(flags.output_dir, flags.sequence, "denth_features")
+    if not os.path.exists(denth_features_folder):
+        os.makedirs(denth_features_folder)
+    print("Denth features dir: ", denth_features_folder)
+
+    sparse_points_with_features_folder = os.path.join(flags.output_dir, flags.sequence, "sparse_points_with_features")
+    if not os.path.exists(sparse_points_with_features_folder):
+        os.makedirs(sparse_points_with_features_folder)
+    print("Sparse points with features dir: ", sparse_points_with_features_folder)
+
+
     # Dataset
     dataset = KittiDatasetFeatures(
         base_dir=flags.kitti_root,
@@ -246,30 +257,34 @@ if __name__ == "__main__":
 
     # Denseな特徴量を復元
     # dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
-    dense_features = interpolate_dense_features(dense_points, sparse_points, sparse_features, k=5)
+    dense_features = interpolate_dense_features(dense_points, sparse_points, sparse_features, k=1)
     print("dense_features size: ", dense_features.shape)
 
-    # 特徴量をファイルごとに出力
     input_file_path = dataset.file_list[DATA_ID]
     file_name = os.path.splitext(os.path.basename(input_file_path))[0]  
-    output_file = os.path.join(output_folder, "{}.txt".format(file_name))
+    
+    # 特徴量をファイルごとに出力
+    # output_file = os.path.join(output_folder, "{}.txt".format(file_name))
+    # np.savetxt(output_file, dense_features, fmt="%.6f")
+
+    # dense_featuresをファイルごとに出力
+    output_file = os.path.join(denth_features_folder, "{}.txt".format(file_name))
     np.savetxt(output_file, dense_features, fmt="%.6f")
+
+    # sparse_points + sparse_featuresをファイルごとに出力
+    output_file = os.path.join(sparse_points_with_features_folder, "{}.txt".format(file_name))
+    np.savetxt(output_file, np.concatenate((sparse_points, sparse_features), axis=1), fmt="%.6f") 
 
 
     # 次元圧縮
-    # pca = PCA(n_components=4)
-    # compressed_features = pca.fit_transform(dense_features)
-    # print("Raw features shape: ", dense_features.shape)
-    # print("compressed features size: ", dense_features.shape)
-    # # 寄与率
-    # print("explained variance ratio: ", pca.explained_variance_ratio_)
-    # print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
-   
+    pca = PCA(n_components=4)
+    compressed_features = pca.fit_transform(dense_features)
+    print("Raw features shape: ", dense_features.shape)
+    print("compressed features size: ", dense_features.shape)
+    # 寄与率
+    print("explained variance ratio: ", pca.explained_variance_ratio_)
+    print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
 
-
-    # 特徴量を読み込み
-    dense_features = np.loadtxt(output_file)
-    print("Dense features shape from txt: ", dense_features.shape)
 
     def pick_points(pcd):
         print("")
@@ -297,7 +312,7 @@ if __name__ == "__main__":
 
     # visualize colored by features
     nearest_points_num = 100
-    points_colors = coloring_similar_feature_points(dense_points, dense_features, picked_points_index, nearest_points_num)
+    points_colors = coloring_similar_feature_points(dense_points, compressed_features, picked_points_index, nearest_points_num)
     
     pcd.colors = open3d.Vector3dVector(points_colors)
     open3d.draw_geometries([pcd])
