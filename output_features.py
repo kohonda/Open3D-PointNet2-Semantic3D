@@ -219,102 +219,103 @@ if __name__ == "__main__":
         hyper_params=hyper_params,
     )
 
-    DATA_ID = 1
-    print("DATA_ID: ", DATA_ID)
-    kitti_file_data = dataset.list_file_data[DATA_ID]
+
+    for i in range(len(dataset.list_file_data)):
+        kitti_file_data = dataset.list_file_data[i]
+        print("Progress: ", i, "/", len(dataset.list_file_data))
+
+        # Get data
+        points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
+                num_points_per_sample=hyper_params["num_point"]
+            )
+        if len(points_centered) > max_batch_size:
+            raise NotImplementedError("TODO: iterate batches if > max_batch_size")
 
 
-    print("raw points size: ", kitti_file_data.points.shape)
+        # Predict and interpolate
+        dense_points = kitti_file_data.points
+        dense_labels, dense_colors, end_points = predictor.predict_and_interpolate(
+                sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
+                sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
+                dense_points=dense_points,  # (num_dense_points, 3)
+            )
 
-    # Get data
-    points_centered, points = kitti_file_data.get_batch_of_one_z_box_from_origin(
-            num_points_per_sample=hyper_params["num_point"]
-        )
-    if len(points_centered) > max_batch_size:
-        raise NotImplementedError("TODO: iterate batches if > max_batch_size")
+        sparse_points = points_centered[0]
 
-    print("sampled points size: ", points.shape)
+        # 特徴量を取得
+        sparse_features = end_points["feats"][0]
+        
+
+        # 次元圧縮
+        pca = PCA(n_components=15)
+        compressed_sparse_features = pca.fit_transform(sparse_features)
+        # print("sparse_features size: ", compressed_sparse_features.shape)
+        # 寄与率
+        # print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
+
+        # Denseな特徴量を復元
+        # dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
+        dense_features = interpolate_dense_features(dense_points, sparse_points, compressed_sparse_features, k=1)
+        # print("dense_features size: ", dense_features.shape)
+
+        input_file_path = dataset.file_list[i]
+        file_name = os.path.splitext(os.path.basename(input_file_path))[0]  
+        
+        # dense_featuresをファイルごとに出力
+        output_file = os.path.join(denth_features_folder, "{}.txt".format(file_name))
+        np.savetxt(output_file, dense_features, fmt="%.6f")
+
+        # sparse_points + sparse_featuresをファイルごとに出力
+        output_file = os.path.join(sparse_points_with_features_folder, "{}.txt".format(file_name))
+        np.savetxt(output_file, np.concatenate((sparse_points, compressed_sparse_features), axis=1), fmt="%.6f")
 
 
-    # Predict and interpolate
-    dense_points = kitti_file_data.points
-    dense_labels, dense_colors, end_points = predictor.predict_and_interpolate(
-            sparse_points_centered_batched=points_centered,  # (batch_size, num_sparse_points, 3)
-            sparse_points_batched=points,  # (batch_size, num_sparse_points, 3)
-            dense_points=dense_points,  # (num_dense_points, 3)
-        )
+        # # 次元圧縮
+        # pca = PCA(n_components=4)
+        # compressed_features = pca.fit_transform(dense_features)
+        # print("Raw features shape: ", dense_features.shape)
+        # print("compressed features size: ", dense_features.shape)
+        # # 寄与率
+        # print("explained variance ratio: ", pca.explained_variance_ratio_)
+        # print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
 
-    print("dense points size: ", dense_points.shape)
+
+        # def pick_points(pcd):
+        #     print("")
+        #     print(
+        #         "1) Please pick point by [shift + left click]"
+        #     )
+        #     print("   Press [shift + right click] to undo point picking")
+        #     print("2) Afther picking points, press q for close the window")
+        #     vis = open3d.VisualizerWithEditing()
+        #     vis.create_window()
+        #     vis.add_geometry(pcd)
+        #     vis.run()  # user picks points
+        #     vis.destroy_window()
+        #     print("")
+        #     return vis.get_picked_points()
+        
+        # # visualize raw points
+        # pcd = open3d.PointCloud()
+        # pcd.points = open3d.Vector3dVector(dense_points)
+        # points_colors = np.zeros((len(dense_points), 3)) # Black
+        # pcd.colors = open3d.Vector3dVector(dense_colors)
+
+        # picked_points_index =  pick_points(pcd)
+        # print("picked points: ", picked_points_index)
+
+        # # visualize colored by features
+        # nearest_points_num = 100
+        # points_colors = coloring_similar_feature_points(dense_points, compressed_features, picked_points_index, nearest_points_num)
+        
+        # pcd.colors = open3d.Vector3dVector(points_colors)
+        # open3d.draw_geometries([pcd])
+
+
+        
+
+
+
+
     
-    # visualize dense points
-    # pcd.points = open3d.Vector3dVector(dense_points)
-    # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
-
-    sparse_points = points_centered[0]
-
-    # 特徴量を取得
-    sparse_features = end_points["feats"][0]
-
-    # Denseな特徴量を復元
-    # dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
-    dense_features = interpolate_dense_features(dense_points, sparse_points, sparse_features, k=1)
-    print("dense_features size: ", dense_features.shape)
-
-    input_file_path = dataset.file_list[DATA_ID]
-    file_name = os.path.splitext(os.path.basename(input_file_path))[0]  
-    
-    # 特徴量をファイルごとに出力
-    # output_file = os.path.join(output_folder, "{}.txt".format(file_name))
-    # np.savetxt(output_file, dense_features, fmt="%.6f")
-
-    # dense_featuresをファイルごとに出力
-    output_file = os.path.join(denth_features_folder, "{}.txt".format(file_name))
-    np.savetxt(output_file, dense_features, fmt="%.6f")
-
-    # sparse_points + sparse_featuresをファイルごとに出力
-    output_file = os.path.join(sparse_points_with_features_folder, "{}.txt".format(file_name))
-    np.savetxt(output_file, np.concatenate((sparse_points, sparse_features), axis=1), fmt="%.6f") 
-
-
-    # 次元圧縮
-    pca = PCA(n_components=4)
-    compressed_features = pca.fit_transform(dense_features)
-    print("Raw features shape: ", dense_features.shape)
-    print("compressed features size: ", dense_features.shape)
-    # 寄与率
-    print("explained variance ratio: ", pca.explained_variance_ratio_)
-    print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
-
-
-    def pick_points(pcd):
-        print("")
-        print(
-            "1) Please pick point by [shift + left click]"
-        )
-        print("   Press [shift + right click] to undo point picking")
-        print("2) Afther picking points, press q for close the window")
-        vis = open3d.VisualizerWithEditing()
-        vis.create_window()
-        vis.add_geometry(pcd)
-        vis.run()  # user picks points
-        vis.destroy_window()
-        print("")
-        return vis.get_picked_points()
-    
-    # visualize raw points
-    pcd = open3d.PointCloud()
-    pcd.points = open3d.Vector3dVector(dense_points)
-    points_colors = np.zeros((len(dense_points), 3)) # Black
-    pcd.colors = open3d.Vector3dVector(dense_colors)
-
-    picked_points_index =  pick_points(pcd)
-    print("picked points: ", picked_points_index)
-
-    # visualize colored by features
-    nearest_points_num = 100
-    points_colors = coloring_similar_feature_points(dense_points, compressed_features, picked_points_index, nearest_points_num)
-    
-    pcd.colors = open3d.Vector3dVector(points_colors)
-    open3d.draw_geometries([pcd])
-
    

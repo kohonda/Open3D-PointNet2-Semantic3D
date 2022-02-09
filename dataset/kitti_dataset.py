@@ -149,7 +149,8 @@ class KittiDatasetFeatures(SemanticDataset):
         self.file_list = sorted(glob.glob(kitti_folder_path + "/*.bin"))
 
         # TODO: 100個だけ
-        for file in self.file_list[:100]:
+        # for file in self.file_list[:100]:
+        for file in self.file_list:
             points = self.__load_kitti_scan(file)
             points_ = points[:, :3]
             # Init file data
