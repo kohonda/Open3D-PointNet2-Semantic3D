@@ -13,8 +13,10 @@ from sklearn.decomposition import PCA
 
 import model
 from dataset.kitti_dataset import KittiDataset, KittiDatasetFeatures
+from features_util.py_wrap import interpolate_dense_features
 from tf_ops.tf_interpolate import interpolate_label_with_color
-from util.features_util import gen_dense_features
+
+# from util.features_util import gen_dense_features
 
 
 def interpolate_dense_labels(sparse_points, sparse_labels, dense_points, k=3):
@@ -151,9 +153,12 @@ def coloring_similar_feature_points(points, features, target_point_idx_list, col
     points_colors = np.zeros((len(points), 3))
     
     for target_point_idx in target_point_idx_list:
-        tree = ss.KDTree(features)    
+        tree = ss.KDTree(features)
         _, index = tree.query(features[target_point_idx], coloring_points_num)
-        points_colors[index] = gen_random_color()
+    
+        color = gen_random_color()
+        for idx in index:
+            points_colors[idx] = color
    
     return points_colors
 
@@ -239,20 +244,9 @@ if __name__ == "__main__":
     # 特徴量を取得
     sparse_features = end_points["feats"][0]
 
-
-    # 次元圧縮
-    pca = PCA(n_components=4)
-    compressed_features = pca.fit_transform(sparse_features)
-    print("Raw features shape: ", sparse_features.shape)
-    print("compressed features size: ", compressed_features.shape)
-    # 寄与率
-    print("explained variance ratio: ", pca.explained_variance_ratio_)
-    print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
-
-
     # Denseな特徴量を復元
-    # TODO: 圧縮する前にinterpolate すること
-    dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
+    # dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
+    dense_features = interpolate_dense_features(dense_points, sparse_points, sparse_features, k=5)
     print("dense_features size: ", dense_features.shape)
 
     # 特徴量をファイルごとに出力
@@ -261,9 +255,21 @@ if __name__ == "__main__":
     output_file = os.path.join(output_folder, "{}.txt".format(file_name))
     np.savetxt(output_file, dense_features, fmt="%.6f")
 
+
+    # 次元圧縮
+    # pca = PCA(n_components=4)
+    # compressed_features = pca.fit_transform(dense_features)
+    # print("Raw features shape: ", dense_features.shape)
+    # print("compressed features size: ", dense_features.shape)
+    # # 寄与率
+    # print("explained variance ratio: ", pca.explained_variance_ratio_)
+    # print("accumulated variance ratio: ", pca.explained_variance_ratio_.sum())
+   
+
+
     # 特徴量を読み込み
-    dense_compressed_features = np.loadtxt(output_file)
-    print("Dense compressed features shape: ", dense_compressed_features.shape)
+    dense_features = np.loadtxt(output_file)
+    print("Dense features shape from txt: ", dense_features.shape)
 
     def pick_points(pcd):
         print("")
@@ -290,8 +296,8 @@ if __name__ == "__main__":
     print("picked points: ", picked_points_index)
 
     # visualize colored by features
-    nearest_points_num = 10
-    points_colors = coloring_similar_feature_points(dense_points, dense_compressed_features, picked_points_index, nearest_points_num)
+    nearest_points_num = 100
+    points_colors = coloring_similar_feature_points(dense_points, dense_features, picked_points_index, nearest_points_num)
     
     pcd.colors = open3d.Vector3dVector(points_colors)
     open3d.draw_geometries([pcd])

@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
 import open3d
+
+print("Open3D version: {}".format(open3d.__version__))
+
 import scipy.spatial as ss
 import tensorflow as tf
 from sklearn.decomposition import PCA
@@ -152,7 +155,9 @@ def coloring_similar_feature_points(points, features, target_point_idx_list, col
     for target_point_idx in target_point_idx_list:
         tree = ss.KDTree(features)    
         _, index = tree.query(features[target_point_idx], coloring_points_num)
-        points_colors[index] = gen_random_color()
+        color = gen_random_color()
+        for idx in index:
+            points_colors[idx] = color
    
     return points_colors
 
@@ -201,7 +206,7 @@ if __name__ == "__main__":
         hyper_params=hyper_params,
     )
 
-    DATA_ID = 107
+    DATA_ID = 10
     print("DATA_ID: ", DATA_ID)
     kitti_file_data = dataset.list_file_data[DATA_ID]
 
@@ -262,6 +267,7 @@ if __name__ == "__main__":
     classed_pcd.points = open3d.Vector3dVector(dense_points)
     classed_pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
+
     # open3d.draw_geometries([pcd])
     open3d.draw_geometries([classed_pcd])
 
@@ -284,8 +290,8 @@ if __name__ == "__main__":
     print("picked points: ", picked_points_index)
 
     # visualize colored by features
-    nearest_points_num = 100
-    points_colors = coloring_similar_feature_points(raw_points, compressed_features, picked_points_index, 30)
+    nearest_points_num = 30
+    points_colors = coloring_similar_feature_points(raw_points, compressed_features, picked_points_index, nearest_points_num)
     
     pcd.colors = open3d.Vector3dVector(points_colors)
     open3d.draw_geometries([pcd])

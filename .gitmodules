@@ -1,0 +1,6 @@
+[submodule "features_util/thirdparty/pybind"]
+	path = features_util/thirdparty/pybind
+	url = https://github.com/pybind/pybind11.git
+[submodule "features_util/thirdparty/nanoflann"]
+	path = features_util/thirdparty/nanoflann
+	url = https://github.com/jlblancoc/nanoflann.git
