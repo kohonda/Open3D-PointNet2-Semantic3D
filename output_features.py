@@ -194,10 +194,10 @@ if __name__ == "__main__":
         os.makedirs(output_folder)
     print("Output dir: ", output_folder)
 
-    denth_features_folder = os.path.join(flags.output_dir, flags.sequence, "denth_features")
-    if not os.path.exists(denth_features_folder):
-        os.makedirs(denth_features_folder)
-    print("Denth features dir: ", denth_features_folder)
+    dense_features_folder = os.path.join(flags.output_dir, flags.sequence, "dense_features")
+    if not os.path.exists(dense_features_folder):
+        os.makedirs(dense_features_folder)
+    print("Dense features dir: ", dense_features_folder)
 
     sparse_points_with_features_folder = os.path.join(flags.output_dir, flags.sequence, "sparse_points_with_features")
     if not os.path.exists(sparse_points_with_features_folder):
@@ -262,7 +262,7 @@ if __name__ == "__main__":
         file_name = os.path.splitext(os.path.basename(input_file_path))[0]  
         
         # dense_featuresをファイルごとに出力
-        output_file = os.path.join(denth_features_folder, "{}.txt".format(file_name))
+        output_file = os.path.join(dense_features_folder, "{}.txt".format(file_name))
         np.savetxt(output_file, dense_features, fmt="%.6f")
 
         # sparse_points + sparse_featuresをファイルごとに出力
