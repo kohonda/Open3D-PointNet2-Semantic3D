@@ -232,7 +232,7 @@ if __name__ == "__main__":
     # pcd.points = open3d.Vector3dVector(dense_points)
     # pcd.colors = open3d.Vector3dVector(dense_colors.astype(np.float64))
 
-    raw_points = points_centered[0]
+    raw_points = points[0]
 
     # 特徴量を取得
     features = end_points["feats"][0]
@@ -269,7 +269,7 @@ if __name__ == "__main__":
 
 
     # open3d.draw_geometries([pcd])
-    open3d.draw_geometries([classed_pcd])
+    open3d.draw_geometries([classed_pcd , pcd])
 
     def pick_points(pcd):
         print("")

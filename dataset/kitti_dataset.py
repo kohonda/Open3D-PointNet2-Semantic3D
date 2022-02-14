@@ -144,9 +144,13 @@ class KittiDatasetFeatures(SemanticDataset):
         # Load files
         self.list_file_data = []
         kitti_folder_path = base_dir + "/sequences/" + sequence_num + "/velodyne"
+
+        print("file_path: ", kitti_folder_path)
         # ソートされたファイル名リストを取得
         # self.__file_list = sorted(os.listdir(kitti_folder_path))
         self.file_list = sorted(glob.glob(kitti_folder_path + "/*.bin"))
+
+        print("file_list size: ", len(self.file_list))
 
         # TODO: 100個だけ
         # for file in self.file_list[:100]:

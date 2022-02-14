@@ -240,7 +240,7 @@ if __name__ == "__main__":
                 dense_points=dense_points,  # (num_dense_points, 3)
             )
 
-        sparse_points = points_centered[0]
+        sparse_points = points[0]
 
         # 特徴量を取得
         sparse_features = end_points["feats"][0]
@@ -255,7 +255,7 @@ if __name__ == "__main__":
 
         # Denseな特徴量を復元
         # dense_features = gen_dense_features(dense_points, sparse_points, compressed_features)
-        dense_features = interpolate_dense_features(dense_points, sparse_points, compressed_sparse_features, k=1)
+        dense_features = interpolate_dense_features(dense_points, sparse_points, compressed_sparse_features, k=3)
         # print("dense_features size: ", dense_features.shape)
 
         input_file_path = dataset.file_list[i]
@@ -306,7 +306,7 @@ if __name__ == "__main__":
 
         # # visualize colored by features
         # nearest_points_num = 100
-        # points_colors = coloring_similar_feature_points(dense_points, compressed_features, picked_points_index, nearest_points_num)
+        # points_colors = coloring_similar_feature_points(dense_points, dense_features, picked_points_index, nearest_points_num)
         
         # pcd.colors = open3d.Vector3dVector(points_colors)
         # open3d.draw_geometries([pcd])
