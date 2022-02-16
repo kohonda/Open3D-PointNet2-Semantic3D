@@ -179,7 +179,7 @@ if __name__ == "__main__":
         "--kitti_root", default="", help="Checkpoint file", required=True
     )
     parser.add_argument("--sequence", default="00", help="sequence")
-    parser.add_argument("--output_dir", default="/home/honda/data/kitti_features_pointnet", help="Output dir")
+    parser.add_argument("--output_dir", default="/home/honda/data/kitti/features", help="Output dir")
     
     
     flags = parser.parse_args()
